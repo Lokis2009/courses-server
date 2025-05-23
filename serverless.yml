@@ -1,0 +1,108 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: lokis
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: courses-server
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: courses-server
+
+stages:
+  default:
+    params:
+      usersTableName: "users-table-${sls:stage}"
+      coursesTableName: "courses-table-${sls:stage}"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [UsersTable, Arn]
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem       # Allow adding items
+            - dynamodb:GetItem       # Allow fetching items
+            - dynamodb:Query         # Allow querying data
+            - dynamodb:Scan          # Allow scanning (optional)
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${param:coursesTableName}
+
+  environment:
+    USERS_TABLE: ${param:usersTableName}
+    COURSES_TABLE: ${param:coursesTableName}
+
+functions:
+#  api:
+#    handler: handlers/handler.handler
+#    events:
+#      - httpApi: "*"
+  courses:
+    handler: handlers/courses.handler
+    events:
+      - httpApi:
+          path: /course
+          method: post
+      - httpApi:
+          path: /courses
+          method: get
+      - httpApi:
+          path: /course/{id}
+          method: get
+  login:
+    handler: handlers/auth.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+          cors:
+            allowedOrigins:
+              - http://localhost:4200
+            allowedHeaders:
+              - Content-Type
+              - Authorization
+            allowedMethods:
+              - GET
+              - POST
+              - OPTIONS
+            allowCredentials: true
+      - httpApi:
+          path: /auth/userinfo
+          method: post
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:usersTableName}
+    CoursesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: courseId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: courseId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:coursesTableName}
+
+
+plugins:
+    - serverless-offline
+
